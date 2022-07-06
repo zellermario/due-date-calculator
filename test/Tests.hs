@@ -1,23 +1,22 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Tests where
-
+import ArbitraryTime
+import BusinessWeek(isBusinessHour, isBusinessDay)
 import Data.Time
 import DueDate
     ( dueDate,
       getValidationErrors,
-      isBusinessHour,
-      isBusinessDay,
       Hours,
-      ValidationError 
+      ValidationError
       (
-        NegativeTurnaround, 
-        SubmitDateIsBeforeNow, 
-        SubmitDateIsNotBusinessHour 
-      ) 
+        NegativeTurnaround,
+        SubmitDateIsBeforeNow,
+        SubmitDateIsNotBusinessHour
+      )
     )
-import Test.QuickCheck.All(quickCheckAll)
+import Test.QuickCheck.All(quickCheckAll, verboseCheckAll)
 import TestHelpers
+import Test.QuickCheck (quickCheck)
 
 -- Throughout the tests, I will use the following abbreviations:
 -- s = submissionDate
@@ -28,7 +27,7 @@ import TestHelpers
 {--------------------------}
 
 zeroIsIdentityForTurnaround :: LocalTime -> Bool
-zeroIsIdentityForTurnaround s = dueDate s 0 == s
+zeroIsIdentityForTurnaround s = dueDate s 0 `minutePrecisionEquals` s
 
 distributiveInTurnaround :: LocalTime -> Hours -> Hours -> Bool
 distributiveInTurnaround s t1 t2 = dueDate (dueDate s t1) t2 == dueDate s (t1 + t2)
@@ -50,7 +49,7 @@ eightBusinessHoursCorrespondToFullDay s t =
     let
         difference = dueDate s t `diffLocalTime` s
     in
-        (t `mod` 8 == 0) `implies` isMultipleOfWholeDay difference
+        (t `mod` 8 == 0 && isBusinessHour s) `implies` isMultipleOfWholeDay difference
 
 fiveBusinessDaysCorrespondToFullWeek :: LocalTime -> Hours -> Bool
 fiveBusinessDaysCorrespondToFullWeek s t =
@@ -59,18 +58,18 @@ fiveBusinessDaysCorrespondToFullWeek s t =
     in
         (t `mod` (5 * 8) == 0) `implies` isMultipleOfWholeWeek difference
 
-onlyPastSubmissionDateFails :: LocalTime -> Hours -> UTCTime -> Bool
+onlyPastSubmissionDateFails :: LocalTime -> Hours -> LocalTime -> Bool
 onlyPastSubmissionDateFails s t now =
     let
-        isSubmissionBeforeNow = (utcToLocalTime utc now `diffLocalTime` s) > 0
+        isSubmissionBeforeNow = (now `diffLocalTime` s) > 0
         errors = getValidationErrors s t now
     in
         (SubmitDateIsBeforeNow `elem` errors) `iff` isSubmissionBeforeNow
 
-onlyNegativeTurnaroundFails :: LocalTime -> Hours -> UTCTime -> Bool
-onlyNegativeTurnaroundFails s t now = (NegativeTurnaround `elem` (getValidationErrors s t now)) `iff` (t < 0)
+onlyNegativeTurnaroundFails :: LocalTime -> Hours -> LocalTime -> Bool
+onlyNegativeTurnaroundFails s t now = (NegativeTurnaround `elem` getValidationErrors s t now) `iff` (t < 0)
 
-onlyNonBusinessHourSubmissionFails :: LocalTime -> Hours -> UTCTime -> Bool
+onlyNonBusinessHourSubmissionFails :: LocalTime -> Hours -> LocalTime -> Bool
 onlyNonBusinessHourSubmissionFails s t now =
     (NegativeTurnaround `elem` getValidationErrors s t now) `iff` not (isBusinessHour s)
 
@@ -114,25 +113,21 @@ followingMondayNoon = LocalTime {
 
 pastSubmissionDateFails :: Bool
 pastSubmissionDateFails =
-    let
-        now = localTimeToUTC utc fridayNoon
-        submissionDate = thursdayNoon
-    in
-    SubmitDateIsBeforeNow `elem` getValidationErrors submissionDate 8 now
+    SubmitDateIsBeforeNow `elem` getValidationErrors thursdayNoon 8 fridayNoon
 
 negativeTurnAroundFails :: Bool
-negativeTurnAroundFails = NegativeTurnaround `elem` getValidationErrors thursdayNoon (-10) (localTimeToUTC utc fridayNoon)
+negativeTurnAroundFails = NegativeTurnaround `elem` getValidationErrors thursdayNoon (-10) fridayNoon
 
 nonBusinessHourSubmissionFails :: Bool
 nonBusinessHourSubmissionFails =
-    SubmitDateIsNotBusinessHour `elem` getValidationErrors saturdayNoon 10 (localTimeToUTC utc saturdayNoon) &&
-    SubmitDateIsNotBusinessHour `elem` getValidationErrors thursdayMidnight 10 (localTimeToUTC utc thursdayNoon)
+    SubmitDateIsNotBusinessHour `elem` getValidationErrors saturdayNoon 10 saturdayNoon &&
+    SubmitDateIsNotBusinessHour `elem` getValidationErrors thursdayMidnight 10 thursdayNoon
 
 validRequestDoesNotFail :: Bool
-validRequestDoesNotFail = null $ getValidationErrors fridayNoon 8 (localTimeToUTC utc thursdayNoon)
+validRequestDoesNotFail = null $ getValidationErrors fridayNoon 8 thursdayNoon
 
-nihgtsAreSkipped :: Bool
-nihgtsAreSkipped = dueDate thursdayNoon 8 == fridayNoon
+nightsAreSkipped :: Bool
+nightsAreSkipped = dueDate thursdayNoon 8 == fridayNoon
 
 weekendsAreSkipped :: Bool
 weekendsAreSkipped = dueDate thursdayNoon (3 * 8) == followingMondayNoon
@@ -141,8 +136,22 @@ weekendsAreSkipped = dueDate thursdayNoon (3 * 8) == followingMondayNoon
 {-- TEST RUNNER --}
 {-----------------}
 
-return []
-runAllTests = $quickCheckAll
+-- return []
+-- runAllTests = $verboseCheckAll
 
-main :: IO Bool
-main = runAllTests
+main :: IO ()
+main = do
+    quickCheck zeroIsIdentityForTurnaround -- fails
+    quickCheck distributiveInTurnaround -- OK
+    quickCheck commutativeInTurnAround -- OK
+    quickCheck onlyNegativeTurnaroundFails -- OK
+    quickCheck onlyNonBusinessHourSubmissionFails -- fails
+    quickCheck onlyPastSubmissionDateFails -- OK
+    quickCheck eightBusinessHoursCorrespondToFullDay -- fails
+    quickCheck fiveBusinessDaysCorrespondToFullWeek -- fails
+    quickCheck pastSubmissionDateFails -- OK
+    quickCheck negativeTurnAroundFails -- OK
+    quickCheck nonBusinessHourSubmissionFails -- OK
+    quickCheck validRequestDoesNotFail -- OK
+    quickCheck nightsAreSkipped -- OK
+    quickCheck weekendsAreSkipped -- fails

@@ -19,6 +19,7 @@ source-repository head
 
 library
   exposed-modules:
+      BusinessWeek
       DueDate
   other-modules:
       Paths_due_date_calculator
@@ -33,6 +34,7 @@ test-suite due-date-calculator-test
   type: exitcode-stdio-1.0
   main-is: Tests.hs
   other-modules:
+      ArbitraryTime
       TestHelpers
       Paths_due_date_calculator
   hs-source-dirs:
