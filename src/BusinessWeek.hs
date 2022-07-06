@@ -1,11 +1,16 @@
 module BusinessWeek where
 
+import Control.Applicative(liftA2)
 import Data.Time(
+    addLocalTime,
     dayOfWeek,
     DayOfWeek(Monday, Friday),
     localDay,
-    LocalTime,
+    LocalTime(LocalTime),
     localTimeOfDay,
+    nominalDay,
+    nominalDiffTimeToSeconds,
+    secondsToNominalDiffTime,
     TimeOfDay(TimeOfDay),
     todHour,
     todMin,
@@ -34,7 +39,7 @@ lengthOfBusinessDayInHours :: Int
 lengthOfBusinessDayInHours = (todHour endOfBusinessDay - todHour startOfBusinessDay) `mod` 24
 
 lengthOfBusinessWeekInDays :: Int
-lengthOfBusinessWeekInDays = (fromEnum endOfBusinessWeek - fromEnum startOfBusinessWeek) `mod` 7
+lengthOfBusinessWeekInDays = (fromEnum endOfBusinessWeek - fromEnum startOfBusinessWeek + 1) `mod` 7
 
 lengthOfBusinessWeekInHours :: Int
 lengthOfBusinessWeekInHours = lengthOfBusinessWeekInDays * lengthOfBusinessDayInHours
@@ -76,3 +81,20 @@ plus (TimeOfBusinessWeek hours minutes) turnAround =
         newTime = TimeOfBusinessWeek (newHours `mod` lengthOfBusinessWeekInHours) minutes
     in (newTime, newHours `div` lengthOfBusinessWeekInHours)
 
+isBusinessDay :: LocalTime -> Bool
+isBusinessDay (LocalTime date _) = 
+    let
+        day = fromEnum $ dayOfWeek date
+        weekStartsOn = fromEnum startOfBusinessWeek
+        weekEndsOn = fromEnum endOfBusinessWeek
+    in
+        day >= weekStartsOn && day <= weekEndsOn
+
+isBusinessHour :: LocalTime -> Bool
+isBusinessHour date@(LocalTime _ time) =
+    let
+        hour = todHour time
+        dayStartsOn = todHour startOfBusinessDay
+        dayEndsOn = todHour endOfBusinessDay
+    in
+        isBusinessDay date && hour >= dayStartsOn && hour < dayEndsOn

@@ -1,9 +1,21 @@
 module DueDate where
 
-import Data.Time(LocalTime, UTCTime, getCurrentTime)
+import BusinessWeek
+import Data.Time(
+    addDays,
+    getCurrentTime,
+    LocalTime(LocalTime),
+    localDay,
+    localTimeOfDay,
+    utcToLocalTime,
+    fromGregorian,
+    midday,
+    midnight,
+    UTCTime, getTimeZone, dayOfWeek
+    )
 
 type Hours = Int
-data ValidationError 
+data ValidationError
     = SubmitDateIsBeforeNow
     | SubmitDateIsNotBusinessHour
     | NegativeTurnaround
@@ -15,19 +27,57 @@ data ValidationError
 calculateDueDate :: LocalTime -> Hours -> IO (Either [ValidationError] LocalTime)
 calculateDueDate submitDate turnAround = do
     now <- getCurrentTime
-    let errors = getValidationErrors submitDate turnAround now
+    timezone <- getTimeZone now
+    let localNow = utcToLocalTime timezone now
+    let errors = getValidationErrors submitDate turnAround localNow
     return $ if null errors
         then Right (dueDate submitDate turnAround)
         else Left errors
 
-getValidationErrors :: LocalTime -> Hours -> UTCTime -> [ValidationError]
-getValidationErrors submitDate turnAround now = []
+getValidationErrors :: LocalTime -> Hours -> LocalTime -> [ValidationError]
+getValidationErrors submitDate turnAround now =
+    [SubmitDateIsBeforeNow | submitDate < now ] ++
+    [SubmitDateIsNotBusinessHour | not . isBusinessHour $ submitDate] ++
+    [NegativeTurnaround | turnAround < 0]
 
 dueDate :: LocalTime -> Hours -> LocalTime
-dueDate submitDate turnAround = submitDate
+dueDate submitDate@(LocalTime submitDay _) turnAround =
+    let
+        submitBusinessTime = toTimeOfBusinessWeek submitDate
+        (deadlineBusinessTime, weekDifference) = submitBusinessTime `plus` turnAround
+        (deadLineDayOfWeek, deadLineTimeOfDay) = fromTimeOfBusinessWeek deadlineBusinessTime
+        weekDayDifference = fromEnum deadLineDayOfWeek - fromEnum (dayOfWeek submitDay)
+        dayDifference = toInteger $ weekDifference * 7 + weekDayDifference
+        deadLineDay = addDays dayDifference submitDay
+    in
+        LocalTime deadLineDay deadLineTimeOfDay
 
-isBusinessDay :: LocalTime -> Bool
-isBusinessDay dateTime = False
+thursdayNoon :: LocalTime
+thursdayNoon = LocalTime {
+    localDay = fromGregorian 2022 7 7,
+    localTimeOfDay = midday
+}
 
-isBusinessHour :: LocalTime -> Bool
-isBusinessHour dateTime = False
+thursdayMidnight :: LocalTime
+thursdayMidnight = LocalTime {
+    localDay = fromGregorian 2022 7 7,
+    localTimeOfDay = midnight
+}
+
+fridayNoon :: LocalTime
+fridayNoon = LocalTime {
+    localDay = fromGregorian 2022 7 8,
+    localTimeOfDay = midday
+}
+
+saturdayNoon :: LocalTime
+saturdayNoon = LocalTime {
+    localDay = fromGregorian 2022 7 9,
+    localTimeOfDay = midday
+}
+
+followingMondayNoon :: LocalTime
+followingMondayNoon = LocalTime {
+    localDay = fromGregorian 2022 7 11,
+    localTimeOfDay = midday
+}
