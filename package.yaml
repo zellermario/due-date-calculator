@@ -8,6 +8,7 @@ description:         Please see the README on GitHub at <https://github.com/zell
 
 dependencies:
 - base >= 4.7 && < 5
+- time
 
 library:
   source-dirs: src
@@ -16,7 +17,7 @@ library:
 
 tests:
   due-date-calculator-test:
-    main:                Spec.hs
+    main:                Tests.hs
     source-dirs:         test
     ghc-options:
     - -threaded
@@ -24,3 +25,4 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - due-date-calculator
+    - QuickCheck
