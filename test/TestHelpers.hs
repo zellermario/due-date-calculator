@@ -1,14 +1,8 @@
 module TestHelpers where
 
-import Data.Fixed (mod')
-import Data.Time(
-    localDay,
-    localTimeOfDay,
-    todHour,
-    todMin,
-    NominalDiffTime,
-    nominalDiffTimeToSeconds,
-    nominalDay, LocalTime, TimeOfDay
+import Data.Time 
+    ( TimeOfDay(TimeOfDay, todMin, todHour), 
+      LocalTime(localTimeOfDay, localDay) 
     )
 
 getMinute :: LocalTime -> Int
@@ -20,8 +14,8 @@ getHour = todHour . localTimeOfDay
 minutePrecisionEquals :: LocalTime -> LocalTime -> Bool
 minutePrecisionEquals a b = localDay a == localDay b && getHour a == getHour b && getMinute a == getMinute b
 
-resolutionInSeconds :: Int
-resolutionInSeconds = 60
+minutePrecisionEqualsTod :: TimeOfDay -> TimeOfDay -> Bool
+minutePrecisionEqualsTod (TimeOfDay h1 m1 s1) (TimeOfDay h2 m2 s2) = h1 == h2 && m1 == m2
 
 implies :: Bool -> Bool -> Bool
 implies a b = not a || b
@@ -37,15 +31,3 @@ distanceInMinutes a b =
         minuteDifference = getMinute a - getMinute b
     in
         abs (dayDifference * 24 * 60 + hourDifference * 60 + minuteDifference)
-
-isMultipleOfWholeDay :: NominalDiffTime -> Bool
-isMultipleOfWholeDay difference =
-    let
-        (diffSeconds, _) = properFraction difference
-        oneDayInSeconds = 60 * 60 * 24
-    in
-        abs (oneDayInSeconds - diffSeconds) < 60
-
-isMultipleOfWholeWeek :: NominalDiffTime -> Bool
-isMultipleOfWholeWeek difference
-    = floor (nominalDiffTimeToSeconds difference) `mod` floor (nominalDiffTimeToSeconds (7 * nominalDay)) < resolutionInSeconds

@@ -1,8 +1,14 @@
-{-# LANGUAGE TemplateHaskell #-}
-
 import ArbitraryTime
-import BusinessWeek(isBusinessHour, isBusinessDay)
+import BusinessWeek
 import Data.Time
+    ( dayOfWeek,
+      midnight,
+      midday,
+      fromGregorian,
+      diffLocalTime,
+      LocalTime(..),
+      TimeOfDay(TimeOfDay)
+    )
 import DueDate
     ( dueDate,
       getValidationErrors,
@@ -75,6 +81,15 @@ onlyNonBusinessHourSubmissionFails :: LocalTime -> Hours -> LocalTime -> Bool
 onlyNonBusinessHourSubmissionFails s t now =
     (SubmitDateIsNotBusinessHour `elem` getValidationErrors s t now) `iff` not (isBusinessHour s)
 
+conversionRoundTrip :: LocalTime -> Bool
+conversionRoundTrip date =
+    let
+        inputDow = dayOfWeek $ localDay date
+        inputTod = localTimeOfDay date
+        (outputDow, outputTod) = fromTimeOfBusinessWeek . toTimeOfBusinessWeek $ date
+    in
+        isBusinessHour date `implies` ((inputDow == outputDow) && (inputTod `minutePrecisionEqualsTod` outputTod))
+
 {------------------------}
 {-- SOME EXAMPLE DATES --}
 {------------------------}
@@ -109,6 +124,34 @@ followingMondayNoon = LocalTime {
     localTimeOfDay = midday
 }
 
+exampleSubmissionTimeA :: LocalTime
+exampleSubmissionTimeA = LocalTime {
+    localDay = fromGregorian 2022 7 8,
+    localTimeOfDay = TimeOfDay 13 48 00
+}
+
+exampleTurnaroundA = 92
+
+exampleExpectedDueDateA :: LocalTime
+exampleExpectedDueDateA = LocalTime {
+    localDay = fromGregorian 2022 7 26,
+    localTimeOfDay = TimeOfDay 9 48 00
+}
+
+exampleSubmissionTimeB :: LocalTime
+exampleSubmissionTimeB = LocalTime {
+    localDay = fromGregorian 2022 7 7, -- Thursday
+    localTimeOfDay = TimeOfDay 10 00 00
+}
+
+exampleTurnaroundB = 7
+
+exampleExpectedDueDateB :: LocalTime
+exampleExpectedDueDateB = LocalTime {
+    localDay = fromGregorian 2022 7 8, -- Friday
+    localTimeOfDay = TimeOfDay 9 00 00
+}
+
 {------------------------------}
 {-- SOME CONCRETE TEST CASES --}
 {------------------------------}
@@ -134,16 +177,30 @@ nightsAreSkipped = dueDate thursdayNoon 8 `minutePrecisionEquals` fridayNoon
 weekendsAreSkipped :: Bool
 weekendsAreSkipped = dueDate thursdayNoon (2 * 8) `minutePrecisionEquals` followingMondayNoon
 
+weekEndIsNotBusinessHour :: Bool
+weekEndIsNotBusinessHour = not $ isBusinessHour saturdayNoon
+
+nightIsNotBusinessHour :: Bool
+nightIsNotBusinessHour = not $ isBusinessHour thursdayMidnight
+
+thursDayNoonIsBusinessHour :: Bool
+thursDayNoonIsBusinessHour = isBusinessHour thursdayNoon
+
+exampleA :: Bool
+exampleA = dueDate exampleSubmissionTimeA exampleTurnaroundA `minutePrecisionEquals` exampleExpectedDueDateA
+
+exampleB :: Bool
+exampleB = dueDate exampleSubmissionTimeB exampleTurnaroundB `minutePrecisionEquals` exampleExpectedDueDateB
+
 {-----------------}
 {-- TEST RUNNER --}
 {-----------------}
 
--- return []
--- runAllTests = $verboseCheckAll
+-- The template extension didn't want to work so I had to list all properties
 
 main :: IO ()
 main = do
-    quickCheck zeroIsIdentityForTurnaround -- OK
+    quickCheck zeroIsIdentityForTurnaround
     quickCheck distributiveInTurnaround
     quickCheck commutativeInTurnAround
     quickCheck onlyNegativeTurnaroundFails
@@ -151,9 +208,15 @@ main = do
     quickCheck onlyPastSubmissionDateFails
     quickCheck eightBusinessHoursCorrespondToFullDay
     quickCheck fiveBusinessDaysCorrespondToFullWeek
+    quickCheck conversionRoundTrip
     quickCheck pastSubmissionDateFails
     quickCheck negativeTurnAroundFails
     quickCheck nonBusinessHourSubmissionFails
     quickCheck validRequestDoesNotFail
     quickCheck nightsAreSkipped
     quickCheck weekendsAreSkipped
+    quickCheck weekEndIsNotBusinessHour
+    quickCheck nightIsNotBusinessHour
+    quickCheck thursDayNoonIsBusinessHour
+    quickCheck exampleA
+    quickCheck exampleB

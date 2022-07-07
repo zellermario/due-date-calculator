@@ -1,19 +1,11 @@
 module BusinessWeek where
 
 import Control.Applicative(liftA2)
-import Data.Time(
-    addLocalTime,
-    dayOfWeek,
-    DayOfWeek(Monday, Friday),
-    localDay,
-    LocalTime(LocalTime),
-    localTimeOfDay,
-    nominalDay,
-    nominalDiffTimeToSeconds,
-    secondsToNominalDiffTime,
-    TimeOfDay(TimeOfDay),
-    todHour,
-    todMin,
+import Data.Time
+    ( TimeOfDay(TimeOfDay, todMin, todHour),
+      LocalTime(..),
+      dayOfWeek,
+      DayOfWeek(Monday, Friday) 
     )
 
 -- Repesents a time on the business week storing: 
