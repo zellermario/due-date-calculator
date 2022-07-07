@@ -27,7 +27,7 @@ import Test.QuickCheck (quickCheck)
 {--------------------------}
 
 zeroIsIdentityForTurnaround :: LocalTime -> Bool
-zeroIsIdentityForTurnaround s = dueDate s 0 `minutePrecisionEquals` s
+zeroIsIdentityForTurnaround s = isBusinessHour s `implies` (dueDate s 0 `minutePrecisionEquals` s)
 
 distributiveInTurnaround :: LocalTime -> Hours -> Hours -> Bool
 distributiveInTurnaround s t1 t2 = dueDate (dueDate s t1) t2 == dueDate s (t1 + t2)
@@ -47,16 +47,18 @@ dueDateIsBusinessHour s = isBusinessHour . dueDate s
 eightBusinessHoursCorrespondToFullDay :: LocalTime -> Hours -> Bool
 eightBusinessHoursCorrespondToFullDay s t =
     let
-        difference = dueDate s t `diffLocalTime` s
+        distance = distanceInMinutes (dueDate s t) s
+        minutesInDay = 24 * 60
     in
-        (t `mod` 8 == 0 && isBusinessHour s) `implies` isMultipleOfWholeDay difference
+        (t `mod` 8 == 0 && isBusinessHour s) `implies` (distance `mod` minutesInDay == 0)
 
 fiveBusinessDaysCorrespondToFullWeek :: LocalTime -> Hours -> Bool
 fiveBusinessDaysCorrespondToFullWeek s t =
     let
-        difference = dueDate s t `diffLocalTime` s
+        distance = distanceInMinutes (dueDate s t) s
+        minutesInWeek = 7 * 24 * 60
     in
-        (t `mod` (5 * 8) == 0) `implies` isMultipleOfWholeWeek difference
+        (t `mod` (5 * 8) == 0  && isBusinessHour s) `implies` (distance `mod` minutesInWeek == 0)
 
 onlyPastSubmissionDateFails :: LocalTime -> Hours -> LocalTime -> Bool
 onlyPastSubmissionDateFails s t now =
@@ -71,7 +73,7 @@ onlyNegativeTurnaroundFails s t now = (NegativeTurnaround `elem` getValidationEr
 
 onlyNonBusinessHourSubmissionFails :: LocalTime -> Hours -> LocalTime -> Bool
 onlyNonBusinessHourSubmissionFails s t now =
-    (NegativeTurnaround `elem` getValidationErrors s t now) `iff` not (isBusinessHour s)
+    (SubmitDateIsNotBusinessHour `elem` getValidationErrors s t now) `iff` not (isBusinessHour s)
 
 {------------------------}
 {-- SOME EXAMPLE DATES --}
@@ -127,10 +129,10 @@ validRequestDoesNotFail :: Bool
 validRequestDoesNotFail = null $ getValidationErrors fridayNoon 8 thursdayNoon
 
 nightsAreSkipped :: Bool
-nightsAreSkipped = dueDate thursdayNoon 8 == fridayNoon
+nightsAreSkipped = dueDate thursdayNoon 8 `minutePrecisionEquals` fridayNoon
 
 weekendsAreSkipped :: Bool
-weekendsAreSkipped = dueDate thursdayNoon (3 * 8) == followingMondayNoon
+weekendsAreSkipped = dueDate thursdayNoon (2 * 8) `minutePrecisionEquals` followingMondayNoon
 
 {-----------------}
 {-- TEST RUNNER --}
@@ -141,17 +143,17 @@ weekendsAreSkipped = dueDate thursdayNoon (3 * 8) == followingMondayNoon
 
 main :: IO ()
 main = do
-    quickCheck zeroIsIdentityForTurnaround -- fails
-    quickCheck distributiveInTurnaround -- OK
-    quickCheck commutativeInTurnAround -- OK
-    quickCheck onlyNegativeTurnaroundFails -- OK
-    quickCheck onlyNonBusinessHourSubmissionFails -- fails
-    quickCheck onlyPastSubmissionDateFails -- OK
-    quickCheck eightBusinessHoursCorrespondToFullDay -- fails
-    quickCheck fiveBusinessDaysCorrespondToFullWeek -- fails
-    quickCheck pastSubmissionDateFails -- OK
-    quickCheck negativeTurnAroundFails -- OK
-    quickCheck nonBusinessHourSubmissionFails -- OK
-    quickCheck validRequestDoesNotFail -- OK
-    quickCheck nightsAreSkipped -- OK
-    quickCheck weekendsAreSkipped -- fails
+    quickCheck zeroIsIdentityForTurnaround -- OK
+    quickCheck distributiveInTurnaround
+    quickCheck commutativeInTurnAround
+    quickCheck onlyNegativeTurnaroundFails
+    quickCheck onlyNonBusinessHourSubmissionFails
+    quickCheck onlyPastSubmissionDateFails
+    quickCheck eightBusinessHoursCorrespondToFullDay
+    quickCheck fiveBusinessDaysCorrespondToFullWeek
+    quickCheck pastSubmissionDateFails
+    quickCheck negativeTurnAroundFails
+    quickCheck nonBusinessHourSubmissionFails
+    quickCheck validRequestDoesNotFail
+    quickCheck nightsAreSkipped
+    quickCheck weekendsAreSkipped
